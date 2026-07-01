@@ -5,9 +5,10 @@ load_dotenv()
 
 GROQ_API_KEY = os.environ["GROQ_API_KEY"]
 PINECONE_API_KEY = os.environ["PINECONE_API_KEY"]
+JINA_API_KEY = os.environ["JINA_API_KEY"]
 PINECONE_INDEX = os.getenv("PINECONE_INDEX", "rag-docs-chat")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+JINA_MODEL = os.getenv("JINA_MODEL", "jina-embeddings-v5-text-small")
 
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
 

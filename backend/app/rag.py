@@ -1,14 +1,16 @@
 import time
 import uuid
-from fastembed import TextEmbedding
+import requests
 from pinecone import Pinecone, ServerlessSpec
 from pinecone.errors.exceptions import NotFoundError
 
 from .config import (
-    PINECONE_API_KEY, PINECONE_INDEX, EMBED_MODEL, EMBED_DIM, TOP_K, MIN_SCORE,
+    PINECONE_API_KEY, PINECONE_INDEX, EMBED_DIM, TOP_K, MIN_SCORE,
+    JINA_API_KEY, JINA_MODEL,
 )
 
-_embedder = TextEmbedding(model_name=EMBED_MODEL)
+JINA_URL = "https://api.jina.ai/v1/embeddings"
+
 _pc = Pinecone(api_key=PINECONE_API_KEY)
 
 if not _pc.has_index(PINECONE_INDEX):
@@ -27,16 +29,33 @@ if not _pc.has_index(PINECONE_INDEX):
 _index = _pc.Index(PINECONE_INDEX)
 
 
-def _embed(texts: list[str]) -> list[list[float]]:
-    return [v.tolist() for v in _embedder.embed(texts)]
+def _embed(texts: list[str], task: str) -> list[list[float]]:
+    resp = requests.post(
+        JINA_URL,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {JINA_API_KEY}",
+        },
+        json={
+            "model": JINA_MODEL,
+            "task": task,
+            "normalized": True,
+            "output_dimension": EMBED_DIM,
+            "input": texts,
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()["data"]
+    return [d["embedding"] for d in sorted(data, key=lambda d: d["index"])]
 
 
 def embed_passages(chunks: list[str]) -> list[list[float]]:
-    return _embed(chunks)
+    return _embed(chunks, task="retrieval.passage")
 
 
 def embed_query(question: str) -> list[float]:
-    return _embed([question])[0]
+    return _embed([question], task="retrieval.query")[0]
 
 
 def store_chunks(chunks: list[str], source: str, namespace: str) -> int:
