@@ -1,28 +1,28 @@
 # DocChat
 
-Upload your documents and ask questions about them. Answers come only from what you
-upload, if it's not in your files, DocChat says so instead of guessing.
+Upload a document, ask questions about it, get answers pulled only from that
+document. If it's not in there, it says so instead of making something up.
 
-Multilingual: works in English, Georgian, and 50+ other languages.
+Works in English, Georgian, and pretty much anything else, the embedding model
+covers 89 languages.
 
-## How it works
+## How it's put together
 
 ```
-Next.js (Vercel)  ->  FastAPI (Render)  ->  Pinecone (vectors)
-   chat UI              parse + embed          Groq (answers)
+Next.js (Vercel) -> FastAPI (Render) -> Pinecone for vectors, Groq for answers
 ```
 
-1. You upload a PDF, DOCX, CSV, TXT, or MD file.
-2. The backend extracts the text, splits it into chunks, and embeds each chunk with
-   a multilingual model (`paraphrase-multilingual-MiniLM-L12-v2`, 384-dim).
-3. Chunks go into Pinecone, scoped to your session so your files stay private.
-4. When you ask a question, the most relevant chunks are retrieved and passed to
-   Groq (`llama-3.3-70b-versatile`) with a strict prompt: answer only from this
-   context. Weakly-related matches are dropped, so off-topic questions get refused.
+Upload a PDF/DOCX/CSV/TXT/MD file and the backend pulls the text out, chunks it,
+and sends each chunk to Jina's embedding API. Those vectors land in Pinecone,
+namespaced per browser session so nobody's docs mix with anyone else's.
 
-Answers stream back token by token.
+When you ask something, the question gets embedded the same way, Pinecone
+returns the closest chunks, and if nothing scores high enough it just tells you
+it doesn't know rather than pretending. Otherwise the chunks go to Groq
+(llama-3.3-70b) with a system prompt that keeps it locked to the provided
+context. Answers stream back as they're generated.
 
-## Run locally
+## Running it yourself
 
 Backend:
 
@@ -30,7 +30,8 @@ Backend:
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env      # fill in GROQ_API_KEY and PINECONE_API_KEY
+cp .env.example .env
+# fill in GROQ_API_KEY, PINECONE_API_KEY, JINA_API_KEY
 uvicorn app.main:app --port 8000
 ```
 
@@ -43,23 +44,33 @@ cp .env.example .env.local   # BACKEND_URL=http://localhost:8000
 npm run dev
 ```
 
-Open http://localhost:3000.
+localhost:3000, upload something, ask it about itself.
 
-## Deploy
+## Deploying
 
-**Backend on Render** (web service):
-- Root directory: `backend`
-- Build: `pip install -r requirements.txt`
-- Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- Env: `GROQ_API_KEY`, `PINECONE_API_KEY`, and `CORS_ORIGINS` set to your Vercel URL
-- Pin Python to 3.12 (Render env var `PYTHON_VERSION=3.12`)
-- The vector store is Pinecone (hosted), so Render's ephemeral disk is fine
+Backend on Render, set the root directory to `backend` (this repo has more
+than one thing in it, Render won't find requirements.txt otherwise). Start
+command:
 
-**Frontend on Vercel**:
-- Root directory: `frontend`
-- Env: `BACKEND_URL` set to your Render URL
+```
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
 
-## Config
+Env vars: `GROQ_API_KEY`, `PINECONE_API_KEY`, `JINA_API_KEY`, and
+`CORS_ORIGINS` pointed at wherever the frontend ends up living. Also set
+`PYTHON_VERSION=3.12`, newer defaults have caused issues here before.
 
-Tunable in `backend/app/config.py`: `TOP_K`, `MIN_SCORE` (retrieval cutoff),
-`CHUNK_SIZE`, `CHUNK_OVERLAP`.
+Frontend on Vercel, root directory `frontend`, one env var:
+`BACKEND_URL` = your Render URL.
+
+Embeddings run through Jina's API instead of loading a model locally,
+originally tried bundling the model directly (fastembed + onnxruntime) but
+that pushed Render's free tier over its 512MB limit on boot. Hosted embeddings
+sidestep that entirely and keep the container small.
+
+## Tuning it
+
+`backend/app/config.py` has the knobs: `TOP_K` for how many chunks get
+retrieved, `MIN_SCORE` for how relevant something has to be before it counts
+(currently 0.30, anything below reads as "not actually related"), and
+`CHUNK_SIZE`/`CHUNK_OVERLAP` for how documents get split up.
