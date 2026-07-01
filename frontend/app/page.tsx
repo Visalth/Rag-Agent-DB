@@ -103,6 +103,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, session }),
+        cache: "no-store",
       });
       if (!res.ok || !res.body) throw new Error("stream failed");
 
@@ -133,7 +134,11 @@ export default function Home() {
         content: m.content || "Something went wrong. Try again.",
       }));
     } finally {
-      updateLast((m) => ({ ...m, streaming: false }));
+      updateLast((m) => ({
+        ...m,
+        content: m.content || "No response came back. Try asking again.",
+        streaming: false,
+      }));
       setSending(false);
     }
   }
@@ -146,7 +151,7 @@ export default function Home() {
       <header className="flex items-baseline justify-between border-b border-zinc-100 py-5">
         <div>
           <h1 className="text-lg font-semibold tracking-tight text-zinc-900">
-            DocChat
+            Rag agent
           </h1>
           <p className="text-sm text-zinc-500">Answers only from your documents.</p>
         </div>
@@ -305,11 +310,10 @@ function UploadZone({
           setDragOver(false);
           onFiles(e.dataTransfer.files);
         }}
-        className={`flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed px-10 py-12 transition ${
-          dragOver
+        className={`flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed px-10 py-12 transition ${dragOver
             ? "border-zinc-900 bg-zinc-50"
             : "border-zinc-200 hover:border-zinc-300"
-        }`}
+          }`}
       >
         <input
           ref={inputRef}
