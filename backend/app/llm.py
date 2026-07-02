@@ -1,24 +1,36 @@
 from groq import Groq
-
 from .config import GROQ_API_KEY, GROQ_MODEL
-
 _client = Groq(api_key=GROQ_API_KEY)
 
 SYSTEM_PROMPT = (
     "You answer strictly from the provided context. "
     "Use only the information in the context to answer the question. "
-    "If the answer is not in the context, reply that you don't know based on the uploaded documents. "
+    "If the context is empty or doesn't contain the answer, say in your own words "
+    "that you don't know, based on the documents uploaded so far - vary your phrasing "
+    "naturally instead of repeating a fixed sentence. "
     "Do not use outside knowledge or make anything up. "
     "Answer in the same language as the question."
 )
 
-NO_CONTEXT_MSG = "I couldn't find anything about that in your uploaded documents."
+
+# groq free tier rejects requests over 12k tokens, and georgian text runs
+# close to 1 token per character, so keep the context well under that
+MAX_CONTEXT_CHARS = 8000
 
 
 def _messages(question: str, chunks: list[dict]) -> list[dict]:
-    context = "\n\n---\n\n".join(
-        f"[Source: {c['source']}]\n{c['text']}" for c in chunks
-    )
+    parts = []
+    used = 0
+    for c in chunks:
+        block = f"[Source: {c['source']}]\n{c['text']}"
+        if parts and used + len(block) > MAX_CONTEXT_CHARS:
+            break
+        parts.append(block)
+        used += len(block)
+    if parts:
+        context = "\n\n---\n\n".join(parts)
+    else:
+        context = "(no matching content found in any uploaded document)"
     user = f"Context:\n{context}\n\nQuestion: {question}"
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -27,8 +39,6 @@ def _messages(question: str, chunks: list[dict]) -> list[dict]:
 
 
 def answer(question: str, chunks: list[dict]) -> str:
-    if not chunks:
-        return NO_CONTEXT_MSG
     resp = _client.chat.completions.create(
         model=GROQ_MODEL,
         temperature=0.2,
@@ -38,9 +48,6 @@ def answer(question: str, chunks: list[dict]) -> str:
 
 
 def answer_stream(question: str, chunks: list[dict]):
-    if not chunks:
-        yield NO_CONTEXT_MSG
-        return
     stream = _client.chat.completions.create(
         model=GROQ_MODEL,
         temperature=0.2,
