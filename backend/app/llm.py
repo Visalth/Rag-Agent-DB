@@ -1,6 +1,6 @@
 from groq import Groq
 from .config import GROQ_API_KEY, GROQ_MODEL
-_client = Groq(api_key=GROQ_API_KEY)
+_client = Groq(api_key=GROQ_API_KEY, max_retries=3)
 
 SYSTEM_PROMPT = (
     "You answer strictly from the provided context. "
@@ -9,7 +9,8 @@ SYSTEM_PROMPT = (
     "that you don't know, based on the documents uploaded so far - vary your phrasing "
     "naturally instead of repeating a fixed sentence. "
     "Do not use outside knowledge or make anything up. "
-    "Answer in the same language as the question."
+    "Always reply in the same language the question was written in, even if the "
+    "context is in a different language. Never switch to the context's language."
 )
 
 
@@ -18,11 +19,18 @@ SYSTEM_PROMPT = (
 MAX_CONTEXT_CHARS = 8000
 
 
+def source_label(chunk: dict) -> str:
+    if chunk.get("page") is not None:
+        return f"{chunk['source']} (p. {chunk['page']})"
+    return chunk["source"]
+
+
 def _messages(question: str, chunks: list[dict]) -> list[dict]:
+    # chunks arrive ranked best-first, so the char budget cuts the weakest ones
     parts = []
     used = 0
     for c in chunks:
-        block = f"[Source: {c['source']}]\n{c['text']}"
+        block = f"[Source: {source_label(c)}]\n{c['text']}"
         if parts and used + len(block) > MAX_CONTEXT_CHARS:
             break
         parts.append(block)

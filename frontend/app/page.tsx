@@ -16,6 +16,7 @@ const ACCEPT = ".pdf,.docx,.csv,.txt,.md";
 export default function Home() {
   const [session, setSession] = useState("");
   const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [sourceFilter, setSourceFilter] = useState("");
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -75,6 +76,7 @@ export default function Home() {
     });
     setFiles([]);
     setMessages([]);
+    setSourceFilter("");
     setError("");
   }
 
@@ -102,7 +104,11 @@ export default function Home() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, session }),
+        body: JSON.stringify({
+          question,
+          session,
+          source: sourceFilter || undefined,
+        }),
         cache: "no-store",
       });
       if (!res.ok || !res.body) throw new Error("stream failed");
@@ -125,6 +131,8 @@ export default function Home() {
             updateLast((m) => ({ ...m, sources: evt.sources }));
           } else if (evt.type === "token") {
             updateLast((m) => ({ ...m, content: m.content + evt.text }));
+          } else if (evt.type === "error") {
+            updateLast((m) => ({ ...m, content: m.content || evt.message }));
           }
         }
       }
@@ -167,7 +175,21 @@ export default function Home() {
 
       {/* Uploaded files */}
       {files.length > 0 && (
-        <div className="flex flex-wrap gap-2 py-3">
+        <div className="flex flex-wrap items-center gap-2 py-3">
+          {files.length > 1 && (
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-600 outline-none focus:border-zinc-400"
+            >
+              <option value="">All files</option>
+              {files.map((f) => (
+                <option key={f.name} value={f.name}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          )}
           {files.map((f) => (
             <span
               key={f.name}
